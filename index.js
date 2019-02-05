@@ -1,24 +1,49 @@
 const { app, BrowserWindow, ipcMain } = require('electron');
 const ffmpeg = require('fluent-ffmpeg');
 
-let browserWindow;
+let mainWindow;
 app.on('ready', () => {
-  browserWindow = new BrowserWindow({
+  mainWindow = new BrowserWindow({
     height: 600,
     width: 800,
     webPreferences: {
       backgroundThrottling: false
     }
   });
-  browserWindow.loadFile('src/index.html');
+  mainWindow.loadFile('src/index.html');
 });
 
 ipcMain.on('videos:added', (event, videos) => {
-  const promise = new Promise((resolve, reject) => {
-    ffmpeg.ffprobe(videos[0].path, (err, metadata) => {
-      resolve(metadata);
+  const promises = videos.map(video => {
+    return new Promise((resolve, reject) => {
+      ffmpeg.ffprobe(video.path, (err, metadata) => {
+        resolve({
+          ...video,
+          duration: metadata.format.duration,
+          'format': 'avi'
+        });
+      });
     });
   });
 
-  promise.then((metadata) => console.log(metadata))
-})
+  Promise.all(promises).then((results) => {
+    mainWindow.webContents.send('metadata:complete', results);
+  })
+
+});
+
+ipcMain.on('convert:videos', (event, videos) => {
+
+  videos.map(video => {
+
+    const outputDirectory = video.path.split(video.name)[0];
+    const outputFileName = video.name.split('.')[0];
+    const outputPath = `${outputDirectory}${outputFileName}.${video.format}`;
+    console.log(outputPath);
+    ffmpeg(video.path)
+      .output(outputPath)
+      .on('end', () => console.log('Video Done'))
+      .run();
+  })
+
+});
