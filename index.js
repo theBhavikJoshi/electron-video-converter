@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain } = require('electron');
+const { app, BrowserWindow, ipcMain, shell } = require('electron');
 const ffmpeg = require('fluent-ffmpeg');
 
 let mainWindow;
@@ -42,8 +42,17 @@ ipcMain.on('convert:videos', (event, videos) => {
     console.log(outputPath);
     ffmpeg(video.path)
       .output(outputPath)
-      .on('end', () => console.log('Video Done'))
+      .on('progress', ({ timemark }) => 
+        mainWindow.webContents.send('conversion:progress', { video, timemark })
+      )
+      .on('end', () => 
+        mainWindow.webContents.send('conversion:end', { video, outputPath })
+      )
       .run();
   })
 
+});
+
+ipcMain.on('open:folder', (event, outputPath) => {
+  shell.showItemInFolder(outputPath);
 });
